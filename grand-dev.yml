@@ -1,0 +1,95 @@
+# Conda environment file taken from grand-mother/grand@dev-next (7f7463f5, 2026-10-02).
+# c-compiler and make have been removed while py-minisign (used when downloading the Zig compiler)
+# was added as a pip dependency.
+
+# One environment for running, building, testing and documenting GRANDlib.
+#
+# Consolidates four lists that had drifted apart: env/conda/reqmt_grandenv_2509.yml
+# (runtime), quality/requirements.txt (test + lint, pip), env/docker_*/requirements.txt
+# (a third set, the only one carrying numba and lmfit), and docs dependencies, which
+# nothing declared at all.
+#
+#     conda env create -f env/conda/grand-dev.yml
+#     conda activate grand-dev
+#     source env/setup.sh          # compiles TURTLE and GULL via src/Makefile
+#     pytest
+#
+# granddb, the data catalogue, ships as part of this package, so its
+# dependencies are here rather than in an overlay -- see the block at the
+# bottom.  reqmt_db.txt remains for installing outside conda.
+name: grand-dev
+channels:
+  - conda-forge
+dependencies:
+  # --- runtime (from reqmt_grandenv_2509.yml) ---
+  - python=3.12
+  - root=6.36.04
+  - numpy # was implicit via scipy; stated so it is a decision
+  - scipy=1.16.1
+  - matplotlib=3.10.6
+  - h5py=3.14.0
+  - uproot=5.6.5
+  - joblib=1.5.2
+  - asdf=4.5.0
+  - ipympl
+  # --- build: src/build_core.py imports these; src/Makefile needs a toolchain ---
+  # These are DECLARED here rather than inherited.  Verified 2026-08-30: the
+  # previous file (reqmt_grandenv_2509.yml) does resolve cffi, pycparser, gcc
+  # and c-compiler transitively -- ROOT pulls in a toolchain -- so the build
+  # works today.  It works by accident: a ROOT version that stopped pulling a
+  # compiler would break `source env/setup.sh` with nothing in any dependency
+  # list to explain why.  `make` is the one that genuinely appears nowhere,
+  # and succeeds only because most Linux hosts ship /usr/bin/make; it would
+  # fail in a minimal container.
+  - cffi
+  - pycparser
+  # --- test and quality (was quality/requirements.txt, installed by pip) ---
+  - pytest
+  - pytest-cov
+  - coverage
+  - pylint
+  - mypy
+  - black
+  - ruff
+  # --- documentation (nothing declared these before) ---
+  - sphinx
+  - sphinx_rtd_theme
+  - sphinx-copybutton
+  - numpydoc
+  - myst-parser
+  - jupyter-sphinx
+  - sphinxcontrib-bibtex # the References page
+  - sphinx-tippy # glossary definitions on hover
+  - ipykernel
+  # --- grand.analysis, the reconstruction package (from dev_marion) ---
+  # Every fitting module imports it.  Not needed by `import grand` or by
+  # anything else, which is why pyproject.toml makes it an optional extra;
+  # it is here so that CI and contributors test the package.
+  - iminuit
+  # --- needed by work now in flight ---
+  - lmfit # docker list only, never in conda
+  - numba # docker list only, never in conda
+  # snakemake is NOT here: conda-forge has no `snakemake-minimal` for this
+  # platform, and the reprocessing pipeline (dev_reprocessing) is the only
+  # thing that needs it.  It belongs in a pipeline overlay, not the core
+  # development environment -- most contributors never run Snakemake.
+  #
+  # --- granddb, the data catalogue ---
+  # These were an optional overlay while granddb sat outside the lint and test
+  # gates.  It does not sit outside them any more: `include = ["grand*"]` in
+  # pyproject.toml matches `granddb`, so it ships in every wheel, and a
+  # distributed package belongs inside the gates that cover the rest.  Tests
+  # cannot skip their way to passing, so the dependencies have to be in the
+  # environment CI builds -- this file, for both the test and the lint job.
+  #
+  # Note the name: conda-forge calls it `psycopg2`, where the pip extra in
+  # pyproject.toml calls it `psycopg2-binary`.  Same library, different
+  # packaging of libpq.
+  - sqlalchemy
+  - psycopg2
+  - paramiko
+  - sshtunnel
+  - scp
+  - pip:
+      # Used to check downloaded zig file signature.
+      - py-minisign
