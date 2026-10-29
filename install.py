@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
+import os
 
 
 class MissingGrandlibPathError(Exception):
@@ -31,6 +32,8 @@ class Config:
     grandlib_root: Path
     root_dir: Path = field(default_factory=lambda: Path(__file__).parent)
     zig_bin: Optional[Path] = None
+    aires_bin: Optional[Path] = None
+    download_data: bool = True
 
     def __post_init__(self):
         self.grandlib_root = Path(self.grandlib_root).expanduser().resolve()
@@ -49,6 +52,8 @@ class Config:
                     "or pass --zig <path>."
                 )
             self.zig_bin = Path(found)
+        if self.aires_bin is not None:
+            self.aires_bin = Path(self.aires_bin).expanduser().resolve()
 
     @property
     def build_dir(self) -> Path:
@@ -228,6 +233,44 @@ def install_package(cfg: Config):
             copied.unlink(missing_ok=True)
 
 
+def set_conda_env_vars(cfg: Config):
+    """Store GRANDlib's environment variables in the active conda environment."""
+    prefix = os.environ.get("CONDA_PREFIX")
+    conda = os.environ.get("CONDA_EXE", "conda")
+    if prefix is None:
+        print("Warning: not a conda environment; skipping environment variables.")
+        return
+
+    env_vars = [f"GRAND_ROOT={cfg.grandlib_root}"]
+    if cfg.aires_bin is not None:
+        env_vars.append(f"AIRESBINDIR={cfg.aires_bin}")
+
+    subprocess.run(
+        [conda, "env", "config", "vars", "set", "-p", prefix, *env_vars],
+        check=True,
+    )
+    print("Environment variables set; re-activate the environment to apply them:\n")
+    print(f"\tconda deactivate && conda activate {Path(prefix).name}\n")
+
+
+def download_data(cfg: Config):
+    """Download the GRAND data model (about 1GB), if not already up to date."""
+    script = cfg.grandlib_root / "data" / "download_data_grand.py"
+    if not script.is_file():
+        print(f"Warning: {script} not found; skipping the data download.")
+        return
+
+    print("Downloading the GRAND data model (about 1GB, skipped if up to date)...")
+    try:
+        subprocess.run([sys.executable, str(script)], check=True)
+    except subprocess.CalledProcessError:
+        print(
+            "Warning: the data download failed. GRANDlib is installed, but the "
+            "detector, noise and topography data are missing. Retry with:\n"
+            f"\tpython {script}"
+        )
+
+
 def cleanup(cfg: Config):
     """Cleanup build artefacts.
 
@@ -281,9 +324,20 @@ def parse_args(args) -> Config:
             sys.exit("error: --zig requires a path")
         zig_bin = args[i + 1]
 
+    aires_bin = None
+    if "--aires" in args:
+        i = args.index("--aires")
+        if i + 1 >= len(args):
+            usage()
+            sys.exit("error: --aires requires a path")
+        aires_bin = args[i + 1]
+    download_data = "--no-download-data" not in args
+
     return Config(
         grandlib_root=args[0],
         zig_bin=zig_bin,
+        aires_bin=aires_bin,
+        download_data=download_data,
     )
 
 
@@ -292,6 +346,8 @@ def usage():
     options = [
         ("--zig [path]", "Use specific Zig binary located at [path]"),
         ("-h, --help", "Show this help message"),
+        ("--aires [path]", "Set AIRESBINDIR to the AIRES bin directory at [path]"),
+        ("--no-download-data", "Do not download the GRAND data model (about 1 GB)"),
     ]
     print("info: Usage: python install.py <grandlib path> [options]\n")
     print("Options:")
@@ -313,6 +369,9 @@ def main():
         cleanup(cfg)
         raise
     cleanup(cfg)
+    set_conda_env_vars(cfg)
+    if cfg.download_data:
+        download_data(cfg)
     print("=== Done ===")
 
 
