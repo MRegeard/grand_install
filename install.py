@@ -5,13 +5,9 @@ import os
 import subprocess
 import shutil
 import sys
-import platform
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, Self
-import urllib.request
-import tarfile
-import re
+from typing import Optional
 from contextlib import contextmanager
 
 
@@ -42,13 +38,19 @@ class Config:
         self.grandlib_root = Path(self.grandlib_root).expanduser().resolve()
         if not (self.grandlib_root / "grand" / "__init__.py").is_file():
             raise MissingGrandlibPathError(
-                f"{self.grandlib_root} is not a Grandlib checkout (no pyptoject.toml)."
+                f"{self.grandlib_root} is not a Grandlib checkout (no grand/ package)."
             )
         self.root_dir = Path(self.root_dir).resolve()
         if self.zig_bin is not None:
             self.zig_bin = Path(self.zig_bin).expanduser().resolve()
         else:
-            self.zig_bin = Path(shutil.which("zig"))
+            found = shutil.which("zig")
+            if found is None:
+                raise RuntimeError(
+                    "No zig found on PATH. Activate the conda environment "
+                    "or pass --zig <path>."
+                )
+            self.zig_bin = Path(found)
 
     @property
     def build_dir(self) -> Path:
@@ -57,10 +59,6 @@ class Config:
     @property
     def grand_dir(self) -> Path:
         return self.grandlib_root / "grand"
-
-    @property
-    def zig_path(self) -> Path:
-        return self.root_dir / ".zig"
 
 
 def clone_repos(cfg: Config):
@@ -141,7 +139,7 @@ def build_c_libs(cfg: Config):
     Notes
     -----
     Zig targets the current OS version by default, which may differ from cffi's
-    deployement target, causing linker warnings. These are harmless for static
+    deployment target, causing linker warnings. These are harmless for static
     linking and can be ignored.
 
     Parameters
@@ -282,17 +280,20 @@ def check_args(argv):
     """
     if len(argv) <= 1:
         usage()
-        raise MissingGrandlibPathError
+        raise MissingGrandlibPathError("Missing <grandlib path> argument.")
     return argv[1:]
 
 
 def parse_args(args) -> Config:
-    """Parse the command line arguments and set config flags is necessary.
+    """Parse the command line arguments and set config flags if necessary.
 
     Parameters
     ----------
-    args: list od str
+    args: list of str
         Command line arguments, python script name trimmed.
+
+    Returns
+    -------
     cfg: Config
         Install configuration.
     """
@@ -336,7 +337,7 @@ def main():
         build_python_ext(cfg)
         install_package(cfg)
     except Exception:
-        print("Error encounter!")
+        print("Error encountered!")
         cleanup(cfg)
         raise
     cleanup(cfg)
