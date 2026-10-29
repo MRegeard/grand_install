@@ -66,6 +66,9 @@ The installation relies on a Python script, which performs the following steps:
   (`_core.abi3.so`) is installed directly in the `grand` folder of the GRANDlib root directory (see below).
 - Install GRANDlib as a Python package, in editable mode.
 - Clean up the build artifacts.
+- Set GRANDlib's environment variables in the conda environment (see
+  [Environment variables](#environment-variables)).
+- Download the GRAND data model (about 1 GB), unless it is already up to date (see [Data model](#data-model)).
 
 The script takes one positional argument: the path to your local GRANDlib directory. This path is used to
 find the `grand.c` and `grand.h` files when building the Python C extension, and to install the resulting
@@ -73,10 +76,76 @@ find the `grand.c` and `grand.h` files when building the Python C extension, and
 
 To run the install script, execute:
 ```bash
-python install.py <PATH_TO_GRANDLIB>
+python install.py <PATH_TO_GRANDLIB> [options]
 ```
 > [!TIP]
 > Remember to activate your conda environment before running this command.
 
-By default, the script uses the `zig` found on your `PATH`, which is the one installed in the conda
-environment. To use a different Zig compiler, pass its path with the `--zig <PATH_TO_ZIG>` option.
+The following options are available:
+
+| Option | Description |
+|---|---|
+| `--zig <PATH_TO_ZIG>` | Use the Zig compiler at `<PATH_TO_ZIG>`. By default, the script uses the `zig` found on your `PATH`, which is the one installed in the conda environment. |
+| `--aires <PATH_TO_AIRES_BIN>` | Set the `AIRESBINDIR` environment variable to the `bin` directory of your AIRES installation. Only needed to convert AIRES/ZHAireS simulations with `sim2root`. |
+| `--no-download-data` | Do not download the GRAND data model. |
+| `-h, --help` | Show the help message. |
+
+### Environment variables
+
+GRANDlib's official procedure sets its environment variables with `source env/setup.sh`, which exports them
+in your current shell. Instead, this install script stores them in the conda environment with
+`conda env config vars set`, so they are set when the environment is activated and removed when it is
+deactivated. The following variables are set:
+
+| Variable | Value | Set |
+|---|---|---|
+| `GRAND_ROOT` | Path to your GRANDlib directory | Always |
+| `AIRESBINDIR` | Path given with `--aires` | Only with `--aires` |
+
+The variables only take effect the next time the environment is activated, so re-activate it once after
+the installation:
+```bash
+conda deactivate && conda activate grand-dev
+```
+
+To list or remove them, use `conda env config vars list` and `conda env config vars unset <NAME>`.
+
+Some variables set by `env/setup.sh` are not needed with this procedure:
+
+- `PYTHONPATH`: the editable install already makes the `grand` package importable.
+- `C_INCLUDE_PATH` and `LIBRARY_PATH`: they are only used when compiling with a system C compiler.
+
+> [!NOTE]
+> `env/setup.sh` also adds GRANDlib's `scripts`, `examples/dataio` and `quality` directories to your `PATH`.
+> This procedure does not, so run these scripts with their full path, for example
+> `python $GRAND_ROOT/scripts/convert_efield2voltage.py`.
+
+### Data model
+
+GRANDlib needs about 1 GB of model data: antenna effective lengths, RF-chain measurements and
+Galactic-noise tables. The install script downloads it by running GRANDlib's
+`data/download_data_grand.py` script, which skips the download if the data is already up to date.
+The data comes from a single server, `forge.in2p3.fr`. If the download fails, GRANDlib is still installed,
+and you can retry later with:
+```bash
+python <PATH_TO_GRANDLIB>/data/download_data_grand.py
+```
+
+Use `--no-download-data` to skip this step, for example if you already have the data.
+
+## Verifying the installation
+
+After re-activating the environment, run the checks recommended by
+[GRANDlib's documentation](https://github.com/grand-mother/grand/blob/dev-next/docs/source/installation.rst)
+from your GRANDlib directory:
+```bash
+python -c "import grand; print(grand.GRAND_DATA_PATH)"   # the package imports
+python -m grand.basis.data_model                          # the data model matches its manifest
+pytest tests/ -q                                          # the full test suite
+```
+
+The full test suite has over 1300 tests and takes about 20 minutes on one core. For a quick check of the
+C extension built by this procedure, run only the TURTLE and GULL tests, which take a few seconds:
+```bash
+pytest tests/geo/ -q
+```
