@@ -71,6 +71,10 @@ The installation relies on a Python script, which performs the following steps:
   [Environment variables](#environment-variables)).
 - Download the GRAND data model (about 1 GB), unless it is already up to date (see [Data model](#data-model)).
 
+> [!NOTE]
+> Contrary to the official installation steps, because GULL and TURTLE are statically linked to `_core.abi3.so`,
+> no compiled library files are copied to the grand `lib` directory.
+
 The script takes one positional argument: the path to your local GRANDlib directory. This path is used to
 find the `grand.c` and `grand.h` files when building the Python C extension, and to install the resulting
 `_core.abi3.so` into GRANDlib's `grand` source directory.
