@@ -198,6 +198,7 @@ def build_python_ext(cfg: Config):
         module = build_ext.build(
             build_dir=cfg.build_dir,
             src_dir=cfg.grandlib_root / "src",
+            zig_bin=cfg.zig_bin,
             out_dir=cfg.grand_dir,
         )
     print(f"Built {module}")

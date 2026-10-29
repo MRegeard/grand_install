@@ -10,13 +10,14 @@ import sysconfig
 import subprocess
 
 
-def make_ffi(src_dir: Path, inc_dir: Path, lib_dir: Path) -> FFI:
+def make_ffi(src_dir: Path, inc_dir: Path, lib_dir: Path, zig_bin: Path) -> FFI:
     ffi = FFI()
 
     ast = parse_file(
         str(src_dir / "grand.h"),
         use_cpp=True,
-        cpp_args=[f"-I{inc_dir}", "-DFILE=struct FILE"],
+        cpp_path=str(zig_bin),
+        cpp_args=["cc", "-E", f"-I{inc_dir}", "-DFILE=struct FILE"],
     )
     ffi.cdef(c_generator.CGenerator().visit(ast))
 
@@ -57,7 +58,9 @@ def strip_conda_rpath(module: Path) -> None:
         )
 
 
-def build(build_dir: Path, src_dir: Path, out_dir: Path | None = None) -> Path:
+def build(
+    build_dir: Path, src_dir: Path, zig_bin: Path, out_dir: Path | None = None
+) -> Path:
     """Build grand._core and return the path of the compiled module."""
     build_dir = Path(build_dir).expanduser().resolve()
     src_dir = Path(src_dir).expanduser().resolve()
@@ -68,7 +71,7 @@ def build(build_dir: Path, src_dir: Path, out_dir: Path | None = None) -> Path:
     tmp_dir = build_dir / "tmp"
 
     check_inputs(src_dir, inc_dir, lib_dir)
-    ffi = make_ffi(src_dir, inc_dir, lib_dir)
+    ffi = make_ffi(src_dir, inc_dir, lib_dir, zig_bin)
 
     tmp_dir.mkdir(parents=True, exist_ok=True)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -92,9 +95,15 @@ def main() -> None:
         required=True,
         help="Directory containing grand.h and grand.c (Grandlib's src/).",
     )
+    zig_found = shutil.which("zig")
+    if zig_found is None:
+        raise RuntimeError(
+            "No zig found on PATH. Activate the conda environment or pass --zig <path>."
+        )
+    parser.add_argument("--zig", type=Path, default=Path(zig_found))
     parser.add_argument("--out-dir", type=Path, default=None)
     args = parser.parse_args()
-    module = build(args.build_dir, args.src_dir, args.out_dir)
+    module = build(args.build_dir, args.src_dir, args.zig, args.out_dir)
     print(f"Built {module}")
 
 
