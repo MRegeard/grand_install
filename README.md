@@ -1,88 +1,81 @@
-# GRANDlib Install: a Unified External Installation procedure
+# GRANDlib Install: a unified external installation procedure
 
-This repository provides a unique cross-plateform procedure to install [GRANDlib](https://github.com/grand-mother/grand).
-Currently, the official installation procedure
-(see: [installation documentation](https://github.com/grand-mother/grand/blob/dev-next/docs/source/installation.rst) --
-on HEAD branch `dev-next`) only support Linux x86-64.
+This repository provides a single, cross-platform procedure to install [GRANDlib](https://github.com/grand-mother/grand).
+The official installation procedure (see the
+[installation documentation](https://github.com/grand-mother/grand/blob/dev-next/docs/source/installation.rst)
+on the default branch, `dev-next`) currently supports only Linux x86-64.
 
-GRANDlib depends on two C library ([TURTLE](https://github.com/niess/turtle) for topography and [GULL](https://github.com/niess/gull)
-for geomagnetic field). Both these library needs to be compiled and linked to the GRANDlib C--Python extension. This step is the
-culprit when it comes to cross-plateform compilation. This procedure rely on the [Zig](https://ziglang.org/)
-compiler ability to natively compile C code to any target architecture and operating system.
+GRANDlib depends on two C libraries: [TURTLE](https://github.com/niess/turtle) for topography and
+[GULL](https://github.com/niess/gull) for the geomagnetic field. Both libraries need to be compiled and linked
+into GRANDlib's Python C extension, and this is the step that makes cross-platform installation difficult.
+This procedure relies on the [Zig](https://ziglang.org/) compiler, which compiles C code consistently
+across operating systems and architectures.
 
-## Pre-requisite and recommandation
+## Prerequisites and recommendations
 
-GRANDlib will be installed in a conda environment (or venv). Therefore, a up-to-date conda installation
-is required.
+GRANDlib is installed in a conda environment, so an up-to-date conda installation is required.
 
 To install GRANDlib as a Python package inside the conda environment, the install script needs a `pyproject.toml` file.
-GRANDlib provides such a file in its `dev-next` (and derived `dev-next-*`) branch. We therefore recommand to checkout to
-the `dev-next` branch to simplify the installtion process. If the current branch of the provided GRANDlib direcory does not
-contains a `pyproject.toml` file, the install script will fallback to the `pyproject.toml` file of this project.
+GRANDlib provides one on its `dev-next` branch (and the `dev-next-*` branches derived from it). We therefore recommend
+checking out the `dev-next` branch to simplify the installation. If the current branch of the provided GRANDlib directory
+contains neither a `pyproject.toml` nor a `setup.py` file, the install script falls back to the `pyproject.toml` file
+provided in this repository.
 
 > [!NOTE]
-> While the authors of this repository will try their best to keep this file in sync with the
-> GRANDlib (`dev-next` branch) one, it cannot be guaranteed.
+> The authors of this repository try their best to keep this file in sync with the one on GRANDlib's
+> `dev-next` branch, but this cannot be guaranteed.
 
 ## Installation
 
 ### Conda environment
 
-We first need to create a conda environment with the packages required for the installation and for
-GRANDlib. These are specified in the `grand-dev.yaml` file, which is a modified version of the
-[`grand-dev.yml`](https://github.com/grand-mother/grand/blob/dev-next/env/conda/grand-dev.yml) file of
-`grand-mother/grand@dev-next` branch. The main difference between the two files is that the former
-removes `c-compiler` and `make`, which are not needed anymore, while adding `zig` as a dependency.
+First, create a conda environment with the packages required for the installation and for GRANDlib.
+They are listed in the `grand-dev.yaml` file of this repository, a modified version of the
+[`grand-dev.yml`](https://github.com/grand-mother/grand/blob/dev-next/env/conda/grand-dev.yml) file from
+GRANDlib's `dev-next` branch. The main difference is that our file removes `make`,
+which is no longer needed, and adds `zig` as a dependency.
 
-Creating the conda environment can be done via the following command:
+To create the conda environment, run:
 ```bash
 conda env create -f grand-dev.yaml
 ```
 > [!NOTE]
-> This will create a conda environment named `grand-dev`, given by the name field of the
-> `grand-dev.yaml` file. A custom name can be assigned by passing the `-n, --name <NAME>`
-> option to the previous command
-> (check [conda documentation](https://docs.conda.io/projects/conda/en/stable/commands/env/create.html)
-> for more).
+> This creates a conda environment named `grand-dev`, as set by the `name` field of the
+> `grand-dev.yaml` file. To use a different name, pass the `-n, --name <NAME>` option to the
+> command above (see the [conda documentation](https://docs.conda.io/projects/conda/en/stable/commands/env/create.html)
+> for details).
 
-To activate the conda environment, run the following command:
+To activate the conda environment, run:
 ```bash
 conda activate grand-dev
 ```
 > [!TIP]
-> Change `grand-dev` to the relevant name if a custom environment name was provided.
+> Replace `grand-dev` with your environment's name if you chose a custom one.
 
 ### Install script
 
-The installation process rely on a python script, which preforms the following:
+The installation relies on a Python script, which performs the following steps:
 
-- Clone the TURTLE and GULL repository into a temporary `build` folder. TURTLE clone is done at the
-specific tag `v0.9`, while GULL is checkout at commit `286ace5` after cloning.
-- Build the C library with zig. This calls `zig build [options]` which run the build script `build.zig`,
-creating two static library file in the temporary build folder.
-- Build the C--Python extension with [CFFI](https://cffi.readthedocs.io/en/stable/),
-calling the `build` function defined in `build_ext.py`. The resulting dynamic library (`_core.abi3.so`)
-is directly installed in the grand folder of the GRANDlib root directory (see below).
-- Install GRANDlib as a python package.
-- Cleanup build artifact.
+- Clone the TURTLE and GULL repositories into a temporary `build` folder. TURTLE is cloned at tag `v0.9`,
+  and GULL is checked out at commit `286ace5` after cloning.
+- Build the C libraries with Zig. This calls `zig build [options]`, which runs the `build.zig` build script
+  and creates two static library files in the temporary `build` folder.
+- Build the Python C extension with [CFFI](https://cffi.readthedocs.io/en/stable/), by calling the `build`
+  function defined in `build_ext.py`. The resulting dynamic library (`_core.abi3.so`) is installed directly
+  in the `grand` folder of the GRANDlib root directory (see below).
+- Install GRANDlib as a Python package, in editable mode.
+- Clean up the build artifacts.
 
-The python script requires one positional argument: the path to the GRANDlib local directory. This
-path is used to recover the `grand.c` and `grand.h` file when building the C-Python extension, as
-well as when installing the resulting `_core.abi3.so` into the GRANDlib `grand` source directory.
+The script takes one positional argument: the path to your local GRANDlib directory. This path is used to
+find the `grand.c` and `grand.h` files when building the Python C extension, and to install the resulting
+`_core.abi3.so` into GRANDlib's `grand` source directory.
 
-To run the install script, execute the following command:
+To run the install script, execute:
 ```bash
 python install.py <PATH_TO_GRANDLIB>
 ```
 > [!TIP]
-> Do not forget to activate your grand environment before running this command.
+> Remember to activate your conda environment before running this command.
 
-A path to a specific zig compiler can be pass to the install script via the `--zig <PATH_TO_ZIG>` option.
-
-
-
-
-
-
-
-
+By default, the script uses the `zig` found on your `PATH`, which is the one installed in the conda
+environment. To use a different Zig compiler, pass its path with the `--zig <PATH_TO_ZIG>` option.
