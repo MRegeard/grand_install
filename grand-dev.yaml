@@ -1,6 +1,5 @@
 # Conda environment file taken from grand-mother/grand@dev-next (7f7463f5, 2026-10-02).
-# c-compiler and make have been removed while py-minisign (used when downloading the Zig compiler)
-# was added as a pip dependency.
+# make has been removed
 
 # One environment for running, building, testing and documenting GRANDlib.
 #
@@ -43,6 +42,7 @@ dependencies:
   # fail in a minimal container.
   - cffi
   - pycparser
+  - c-compiler
   # --- test and quality (was quality/requirements.txt, installed by pip) ---
   - pytest
   - pytest-cov
@@ -93,4 +93,3 @@ dependencies:
   - pip
   # Install dependency
   - zig=0.16.0
-  - pip:
