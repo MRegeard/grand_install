@@ -1,7 +1,7 @@
-# GRANDlib Install: a unified external installation procedure
+# GRANDlib Install: a cross-platform installer
 
-This repository provides a single, cross-platform procedure to install [GRANDlib](https://github.com/grand-mother/grand).
-The official installation procedure (see the
+This repository provides a single, cross-platform way to install [GRANDlib](https://github.com/grand-mother/grand).
+GRANDlib official installation instruction (see the
 [installation documentation](https://github.com/grand-mother/grand/blob/dev-next/docs/source/installation.rst)
 on the default branch, `dev-next`) currently supports only Linux x86-64.
 
