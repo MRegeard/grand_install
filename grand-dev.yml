@@ -90,6 +90,7 @@ dependencies:
   - paramiko
   - sshtunnel
   - scp
+  - pip
   - pip:
       # Used to check downloaded zig file signature.
       - py-minisign
