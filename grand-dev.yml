@@ -91,6 +91,6 @@ dependencies:
   - sshtunnel
   - scp
   - pip
+  # Install dependency
+  - zig=0.16.0
   - pip:
-      # Used to check downloaded zig file signature.
-      - py-minisign

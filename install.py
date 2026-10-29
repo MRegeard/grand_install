@@ -15,95 +15,14 @@ import re
 from contextlib import contextmanager
 
 
-class InvalidVersion(Exception):
-    pass
-
-
 class MissingGrandlibPathError(Exception):
     pass
-
-
-@dataclass(order=True)
-class Version:
-    """Software version.
-
-    This class store software version. Largely inspired by Zig `std.SemanticVersion`.
-
-    Notes
-    -----
-    For now the pre-release and build specific tags are not supported.
-
-    Parameters
-    ----------
-    major: int
-        Major version number.
-    minor: int
-        Minor version number.
-    patch: int
-        Patch version number.
-    """
-
-    major: int
-    minor: int
-    patch: int
-
-    @classmethod
-    def parse(cls, input_str: str) -> Self:
-        """Parse the version from a string.
-
-        Parameters
-        ----------
-        input_str: str
-            String containing the version to be parsed.
-        """
-        required = re.split(r"[+\-]", input_str)
-        required = required[0]
-
-        # Parse required major, minor and patch numbers.
-        ver_split = required.split(".")
-        if len(ver_split) != 3:
-            raise InvalidVersion(
-                f"Expected version format to be `Major.minor.patch`, got {required}."
-            )
-        kwargs = {}
-        kwargs["major"] = int(ver_split[0])
-        kwargs["minor"] = int(ver_split[1])
-        kwargs["patch"] = int(ver_split[2])
-        return cls(**kwargs)
-
-    def __str__(self):
-        """String representation."""
-        s = f"{self.major}.{self.minor}.{self.patch}"
-        return s
-
-
-@dataclass
-class Range:
-    """Version range.
-
-    Parameters
-    ----------
-    min: Version
-        Minimum version.
-    max: Verison
-        Maximum version.
-    """
-
-    min: Version
-    max: Version
-
-    def includes_version(self: Self, ver: Version) -> bool:
-        return self.min <= ver < self.max
 
 
 TURTLE_URL = "https://github.com/niess/turtle.git"
 GULL_URL = "https://github.com/niess/gull.git"
 GULL_TAG = "286ace5"
 TURTLE_VERSION = "v0.9"
-
-ZIG_VERSION_RANGE = Range(min=Version.parse("0.16.0"), max=Version.parse("0.17.0"))
-ZIG_DL_URL = "https://ziglang.org/download/"
-ZIG_VERSION = "0.16.0"
 
 FALLBACK_PYPROJECT = Path(__file__).parent / "fallback" / "pyproject.toml"
 
@@ -129,6 +48,8 @@ class Config:
         self.root_dir = Path(self.root_dir).resolve()
         if self.zig_bin is not None:
             self.zig_bin = Path(self.zig_bin).expanduser().resolve()
+        else:
+            self.zig_bin = Path(shutil.which("zig"))
 
     @property
     def build_dir(self) -> Path:
@@ -210,143 +131,6 @@ def clone_repos(cfg: Config):
             raise RuntimeError(f"Failed to clone gull: {e}") from e
     else:
         print("gull already cloned, skipping.")
-
-
-def install_zig(cfg: Config):
-    """Install the Zig compiler.
-
-    Check if a Zig compiler is installed and if the version mathced
-
-    Parameters
-    ----------
-    cfg: Config
-       Install configuration.
-    """
-    system = platform.system()
-    machine = platform.machine()
-
-    # Check if zig is already available
-    zig_bin = cfg.zig_bin
-    if zig_bin is None:
-        found = shutil.which("zig")
-        zig_bin = Path(found) if found is not None else None
-
-    if zig_bin is not None:
-        print(f"Found zig executable at {zig_bin}...")
-        version = (
-            subprocess.run([zig_bin, "version"], check=True, capture_output=True)
-            .stdout.decode()
-            .strip()
-        )
-        print(f"Zig version: {version}")
-        if ZIG_VERSION_RANGE.includes_version(Version.parse(version)):
-            print(f"Zig version {version} matches the requirement.")
-            cfg.zig_bin = zig_bin
-            return
-        print(
-            f"""Found zig version: {version}, but requires zig version
-            between {ZIG_VERSION_RANGE.min} and {ZIG_VERSION_RANGE.max}..."""
-        )
-
-    if cfg.download is False:
-        raise RuntimeError(
-            f"No Zig {ZIG_VERSION_RANGE.min}–{ZIG_VERSION_RANGE.max} found and "
-            "--no-download was given. Use --zig <path> or allow the download."
-        )
-
-    # If no Zig compiler is found in the PATH or is its version does match,
-    # check if there is a Zig version in the .zig folder of the root dir
-    local = find_local_zig(cfg.zig_path)
-    if local is not None:
-        cfg.zig_bin = local
-        print(f"Using previously downloaded Zig at {cfg.zig_bin}")
-        return
-
-    # Otherwise, download Zig
-    arch = "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
-    if system == "Darwin":
-        url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-macos-{ZIG_VERSION}.tar.xz"
-    elif system == "Linux":
-        url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-linux-{ZIG_VERSION}.tar.xz"
-    elif system == "Windows":
-        arch = "aarch64" if machine == "ARM64" else "x86_64"
-        url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-windows-{ZIG_VERSION}.zip"
-    else:
-        raise RuntimeError(f"Please install Zig manually from {ZIG_DL_URL}")
-
-    cfg.zig_path.mkdir(exist_ok=True)
-    print(f"Downloading Zig from {url}...")
-    if system == "Windows":
-        tarball = cfg.zig_path / "zig.zip"
-    else:
-        tarball = cfg.zig_path / "zig.tar.xz"
-    urllib.request.urlretrieve(url, str(tarball))
-
-    verify_zig_signature(cfg, tarball, url)
-
-    print("Extracting Zig...")
-    if system == "Windows":
-        import zipfile
-
-        with zipfile.ZipFile(str(tarball)) as zf:
-            zf.extractall(str(cfg.zig_path))
-    else:
-        with tarfile.open(str(tarball)) as tar:
-            if hasattr(tarfile, "data_filter"):
-                tar.extractall(str(cfg.zig_path), filter="data")
-            else:
-                tar.extractall(str(cfg.zig_path))
-    tarball.unlink()
-
-    cfg.zig_bin = find_local_zig(cfg.zig_path)
-    if cfg.zig_bin is None:
-        raise RuntimeError(f"Zig extracted to {cfg.zig_path} but no binary was found.")
-    print(f"Zig installed at {cfg.zig_bin}")
-
-
-def find_local_zig(zig_path: Path) -> Optional[Path]:
-    name = "zig.exe" if platform.system() == "Windows" else "zig"
-    return next(zig_path.glob(f"zig-*/{name}"), None)
-
-
-def verify_zig_signature(cfg: Config, tarball: Path, url: str):
-    """Verify Zig compiler signature to avoid corrupted data.
-
-    Parameters
-    ----------
-    cfg: Config
-       Install configuration.
-    tarball: Path
-        The tarball to check.
-    url: str
-       The base url to fetch the signature.
-    """
-    import minisign
-
-    ZIG_PUBLIC_KEY = "RWSGOq2NVecA2UPNdBUZykf1CCb147pkmdtYxgb3Ti+JO/wCYvhbAb/U"
-
-    sig_url = url + ".minisig"
-    sig_file = tarball.parent / (tarball.name + ".minisig")
-    print(f"Downloading signature from {sig_url}...")
-    urllib.request.urlretrieve(sig_url, str(sig_file))
-
-    print("Verifying signature...")
-    try:
-        pk = minisign.PublicKey.from_base64(ZIG_PUBLIC_KEY)
-        with open(tarball, "rb") as f:
-            data = f.read()
-        with open(sig_file, "rb") as f:
-            sig = minisign.Signature.from_bytes(f.read())
-        pk.verify(data, sig)
-        print("Signature verified successfully.")
-    except Exception as e:
-        tarball.unlink(missing_ok=True)
-        raise RuntimeError(
-            f"Zig signature verification failed: {e}\n"
-            "The download may be corrupted or tampered with."
-        ) from e
-    finally:
-        sig_file.unlink(missing_ok=True)
 
 
 def build_c_libs(cfg: Config):
@@ -551,7 +335,6 @@ def main():
     print("=== Installing GRANDlib ===")
     try:
         clone_repos(cfg)
-        install_zig(cfg)
         build_c_libs(cfg)
         build_python_ext(cfg)
         install_package(cfg)
