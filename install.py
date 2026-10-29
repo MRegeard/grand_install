@@ -1,14 +1,12 @@
 # Install script for GRANDlib.
 # Usage: python install.py <grandlib path> [options]
 
-import os
 import subprocess
 import shutil
 import sys
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
-from contextlib import contextmanager
 
 
 class MissingGrandlibPathError(Exception):
@@ -38,7 +36,7 @@ class Config:
         self.grandlib_root = Path(self.grandlib_root).expanduser().resolve()
         if not (self.grandlib_root / "grand" / "__init__.py").is_file():
             raise MissingGrandlibPathError(
-                f"{self.grandlib_root} is not a Grandlib checkout (no grand/ package)."
+                f"{self.grandlib_root} is not a GRANDlib checkout (no grand/ package)."
             )
         self.root_dir = Path(self.root_dir).resolve()
         if self.zig_bin is not None:
@@ -134,13 +132,7 @@ def build_c_libs(cfg: Config):
     """Build the C libraries.
 
     Invoke the Zig compiler to build the C libraries using the build script
-    located at `src/build.zig`.
-
-    Notes
-    -----
-    Zig targets the current OS version by default, which may differ from cffi's
-    deployment target, causing linker warnings. These are harmless for static
-    linking and can be ignored.
+    `build.zig` located at the root of this repository.
 
     Parameters
     ----------
@@ -161,46 +153,25 @@ def build_c_libs(cfg: Config):
     )
 
 
-@contextmanager
-def temp_environ(**overrides: str):
-    """Temporarily set environment variables, restoring them afterwards.
-
-    Parameters
-    ----------
-    overrides: str
-        Environment variable to override. Expected by keyword arguments call:
-        `ENV_NAME = "env_value"`.
-    """
-    saved = {k: os.environ.get(k) for k in overrides}
-    os.environ.update(overrides)
-    try:
-        yield
-    finally:
-        for k, v in saved.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-
-
 def build_python_ext(cfg: Config):
-    """Build the python C extension in-process with cffi.
+    """Build the Python C extension.
+
+    cffi generates the C source of the extension, and Zig compiles and links it.
 
     Parameters
     ----------
     cfg: Config
-        Install configuration
+        Install configuration.
     """
     import build_ext
 
-    print("Building Python extension with cffi...")
-    with temp_environ(LDFLAGS="", CFLAGS="", CXXFLAGS=""):
-        module = build_ext.build(
-            build_dir=cfg.build_dir,
-            src_dir=cfg.grandlib_root / "src",
-            zig_bin=cfg.zig_bin,
-            out_dir=cfg.grand_dir,
-        )
+    print("Building Python C extension with cffi and Zig...")
+    module = build_ext.build(
+        build_dir=cfg.build_dir,
+        src_dir=cfg.grandlib_root / "src",
+        out_dir=cfg.grand_dir,
+        zig_bin=cfg.zig_bin,
+    )
     print(f"Built {module}")
 
 
@@ -281,7 +252,7 @@ def check_args(argv):
     """
     if len(argv) <= 1:
         usage()
-        raise MissingGrandlibPathError("Missing <grandlib path> argument.")
+        raise MissingGrandlibPathError("missing <grandlib path> argument")
     return argv[1:]
 
 

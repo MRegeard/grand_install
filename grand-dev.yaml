@@ -42,7 +42,6 @@ dependencies:
   # fail in a minimal container.
   - cffi
   - pycparser
-  - c-compiler
   # --- test and quality (was quality/requirements.txt, installed by pip) ---
   - pytest
   - pytest-cov

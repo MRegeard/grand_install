@@ -32,8 +32,8 @@ provided in this repository.
 First, create a conda environment with the packages required for the installation and for GRANDlib.
 They are listed in the `grand-dev.yaml` file of this repository, a modified version of the
 [`grand-dev.yml`](https://github.com/grand-mother/grand/blob/dev-next/env/conda/grand-dev.yml) file from
-GRANDlib's `dev-next` branch. The main difference is that our file removes `make`,
-which is no longer needed, and adds `zig` as a dependency.
+GRANDlib's `dev-next` branch. The main difference is that our file removes `c-compiler` and `make`,
+which are no longer needed, and adds `zig` as a dependency.
 
 To create the conda environment, run:
 ```bash
@@ -60,9 +60,10 @@ The installation relies on a Python script, which performs the following steps:
   and GULL is checked out at commit `286ace5` after cloning.
 - Build the C libraries with Zig. This calls `zig build [options]`, which runs the `build.zig` build script
   and creates two static library files in the temporary `build` folder.
-- Build the Python C extension with [CFFI](https://cffi.readthedocs.io/en/stable/), by calling the `build`
-  function defined in `build_ext.py`. The resulting dynamic library (`_core.abi3.so`) is installed directly
-  in the `grand` folder of the GRANDlib root directory (see below).
+- Build the Python C extension by calling the `build` function defined in `build_ext.py`.
+  [CFFI](https://cffi.readthedocs.io/en/stable/) generates the C source of the extension, and Zig
+  preprocesses, compiles and links it, so no system C compiler is needed. The resulting dynamic library
+  (`_core.abi3.so`) is installed directly in the `grand` folder of the GRANDlib root directory (see below).
 - Install GRANDlib as a Python package, in editable mode.
 - Clean up the build artifacts.
 
