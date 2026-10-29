@@ -64,7 +64,8 @@ The installation relies on a Python script, which performs the following steps:
   [CFFI](https://cffi.readthedocs.io/en/stable/) generates the C source of the extension, and Zig
   preprocesses, compiles and links it, so no system C compiler is needed. The resulting dynamic library
   (`_core.abi3.so`) is installed directly in the `grand` folder of the GRANDlib root directory (see below).
-- Install GRANDlib as a Python package, in editable mode.
+- Install GRANDlib as a Python package, in editable mode, and add the GRANDlib directory to the Python path
+  of the conda environment (see [Environment variables](#environment-variables)).
 - Clean up the build artifacts.
 - Set GRANDlib's environment variables in the conda environment (see
   [Environment variables](#environment-variables)).
@@ -110,10 +111,14 @@ conda deactivate && conda activate grand-dev
 
 To list or remove them, use `conda env config vars list` and `conda env config vars unset <NAME>`.
 
-Some variables set by `env/setup.sh` are not needed with this procedure:
+`env/setup.sh` also sets the following variables, which this procedure handles differently:
 
-- `PYTHONPATH`: the editable install already makes the `grand` package importable.
-- `C_INCLUDE_PATH` and `LIBRARY_PATH`: they are only used when compiling with a system C compiler.
+- `PYTHONPATH`: `env/setup.sh` adds the GRANDlib directory to it, which makes the top-level modules of the
+  repository, such as `sim2root`, importable. The editable install only makes the `grand` package importable,
+  so the install script instead adds the GRANDlib directory to the Python path of the conda environment,
+  with a `grandlib_root.pth` file in its `site-packages` directory. To undo it, delete this file.
+- `C_INCLUDE_PATH` and `LIBRARY_PATH`: they are only used when compiling with a system C compiler,
+  so they are not needed.
 
 > [!NOTE]
 > `env/setup.sh` also adds GRANDlib's `scripts`, `examples/dataio` and `quality` directories to your `PATH`.

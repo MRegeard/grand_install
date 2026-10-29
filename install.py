@@ -2,6 +2,7 @@
 # Usage: python install.py <grandlib path> [options]
 
 import subprocess
+import sysconfig
 import shutil
 import sys
 from pathlib import Path
@@ -233,6 +234,14 @@ def install_package(cfg: Config):
             copied.unlink(missing_ok=True)
 
 
+def add_grandlib_root_to_path(cfg: Config):
+    """Make top-level GRANDlib modules (e.g. sim2root) importable, like PYTHONPATH in env/setup.sh."""
+    site_packages = Path(sysconfig.get_path("purelib"))
+    pth = site_packages / "grandlib_root.pth"
+    pth.write_text(f"{cfg.grandlib_root}\n")
+    print(f"Added {cfg.grandlib_root} to the Python path ({pth})")
+
+
 def set_conda_env_vars(cfg: Config):
     """Store GRANDlib's environment variables in the active conda environment."""
     prefix = os.environ.get("CONDA_PREFIX")
@@ -364,6 +373,7 @@ def main():
         build_c_libs(cfg)
         build_python_ext(cfg)
         install_package(cfg)
+        add_grandlib_root_to_path(cfg)
     except Exception:
         print("Error encountered!")
         cleanup(cfg)
