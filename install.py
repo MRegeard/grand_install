@@ -37,7 +37,6 @@ class Config:
     grandlib_root: Path
     root_dir: Path = field(default_factory=lambda: Path(__file__).parent)
     zig_bin: Optional[Path] = None
-    download: bool = True
 
     def __post_init__(self):
         self.grandlib_root = Path(self.grandlib_root).expanduser().resolve()
@@ -312,14 +311,12 @@ def parse_args(args) -> Config:
     return Config(
         grandlib_root=args[0],
         zig_bin=zig_bin,
-        download="--no-download" not in args,
     )
 
 
 def usage():
     """Print usage."""
     options = [
-        ("--no-download", "Do not download the Zig compiler"),
         ("--zig [path]", "Use specific Zig binary located at [path]"),
         ("-h, --help", "Show this help message"),
     ]
