@@ -1,0 +1,277 @@
+# Fallback copy of GRANDlib pyproject.toml, from grand-mother/grand@dev-next (7f7463f5, 2026-10-02).
+# Used only when GRANDlib checkout provides neither pyproject.toml nor setup.py.
+
+# Packaging metadata for GRANDlib.
+#
+# Scope, deliberately narrow.  This file makes the package installable and
+# gives one place for its dependencies.  It does NOT build the C extension:
+# TURTLE and GULL are compiled by src/Makefile and src/build_core.py, driven
+# by env/setup.sh, and moving that into a build backend is a separate piece of
+# work.  Nor does it declare console entry points -- the scripts under
+# scripts/ run their argument parsing at module level rather than in a main(),
+# so they need a small refactor first.  Both are noted below.
+#
+# ROOT is not on PyPI and cannot be a dependency here.  `pip install -e .`
+# therefore assumes an environment that already has it:
+#
+#     conda env create -f env/conda/grand-dev.yml --solver=libmamba
+#     conda activate grand-dev
+#     pip install -e ".[dev]"
+#
+# PR 154 (unified_install) proposed a single Zig-based installer instead; it
+# was closed on 2026-09-28, the collaboration keeping the pip and Docker
+# installations.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grand"
+
+# The PACKAGE version.  Not to be confused with grand/dataio/version, which
+# is 1.0.2 and versions the ROOT *data format* -- a separate thing on its own
+# release cycle, stamped into files so that a reader can tell which schema
+# wrote them.  Conflating the two would make a package release imply a format
+# change and vice versa.
+# Bump this whenever released behaviour changes, not only on releases.
+#
+# TVoltage.grandlib_version records this string in every simulated voltage
+# file, so a reader can tell which code produced it. That is worth nothing if
+# the string never moves -- and it did not: it sat at 0.1.0.dev0 across the
+# first twenty-seven milestone tags, spanning a change that made every
+# simulated voltage sqrt(2) larger.
+#
+# dev1 marks that change: the galactic-noise normalisation fix of 2026-09-07.
+# A file stamped dev0, or carrying no stamp at all, predates it.
+version = "0.1.0.dev1"
+
+description = "Offline data handling, simulation and analysis for the Giant Radio Array for Neutrino Detection"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LGPL-3.0-or-later"
+license-files = ["LICENSE", "COPYING.LESSER"]
+authors = [{ name = "The GRAND Collaboration" }]
+keywords = ["astroparticle", "ultra-high-energy", "neutrino", "cosmic ray",
+            "radio detection", "air shower"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Astronomy",
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+]
+
+# ROOT is absent on purpose: it comes from conda, not pip.  Everything here
+# is pip-installable, so `pip install -e .` inside the conda environment is
+# additive rather than fighting it.
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
+    "h5py>=3.8",
+    "uproot>=5.0",
+    "joblib>=1.3",
+    "asdf>=3.0",
+    "cffi",         # src/build_core.py
+    "pycparser",    # src/build_core.py
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest", "pytest-cov", "coverage", "pylint", "mypy", "black", "ruff",
+    # grand.aoi.event carries @profile hooks for line-by-line profiling.
+    # They degrade to a no-op when this is absent, so it stays optional.
+    "line_profiler",
+]
+# grand.analysis only: every fitting module imports iminuit.  Optional
+# because `import grand` and everything outside grand.analysis work without
+# it -- most users read and simulate, and never reconstruct.
+analysis = ["iminuit"]
+docs = [
+    "sphinx", "sphinx-rtd-theme", "sphinx-copybutton", "numpydoc",
+    "myst-parser", "jupyter-sphinx", "sphinxcontrib-bibtex", "ipykernel", "sphinx-tippy",
+    # jupyter-sphinx executes the docstring examples in a real kernel, so
+    # what those examples import has to be installed too.
+    "numpy", "scipy", "matplotlib",
+]
+db = ["sqlalchemy", "psycopg2-binary", "paramiko", "sshtunnel", "scp"]
+# examples/eventviewer/ only.  Kept out of the main dependency list because
+# these are a web-plotting stack of their own -- installing them for everyone
+# would grow the environment for a tool most people never open.
+#   pip install -e ".[viewer]"
+# seaborn is here for one call, but not droppable: three of the viewer's
+# colour options (mako_r, vlag, colorblind) are seaborn palettes with no
+# matplotlib equivalent, and the selector is on the live path.
+viewer = ["panel", "holoviews", "bokeh", "pandas", "seaborn"]
+
+[project.urls]
+Homepage = "https://github.com/grand-mother/grand"
+Documentation = "https://grand-mother.github.io/grand"
+Paper = "https://arxiv.org/abs/2408.10926"
+Issues = "https://github.com/grand-mother/grand/issues"
+
+# [project.scripts]
+# Not yet.  scripts/convert_efield2voltage.py and its siblings parse their
+# arguments at import time, so importing them to reach an entry point would
+# run the parser.  Wrapping each in a main() is small but is a behaviour
+# change to user-facing tools, so it belongs with the interface work rather
+# than here.
+
+[tool.setuptools.packages.find]
+# `grand*` also matches `granddb`, which therefore ships: `pip install
+# grand[db]` gets both it and the sqlalchemy/psycopg2/paramiko/sshtunnel/scp
+# it needs.  That is intended -- it is how you fetch and catalogue GRAND data
+# -- but note that it means granddb is a distributed part of this package and
+# belongs inside the same lint and test gates as `grand/`, which it is not in
+# yet.  This comment used to claim granddb was excluded; it never was.
+#
+# sim2root really is excluded: converter scripts that are run, not imported.
+include = ["grand*"]
+
+[tool.setuptools.package-data]
+# Every non-Python file the package opens from its own directory.  Without
+# them a wheel built where setuptools does not see the git checkout imported
+# with "macro vector_filling.C not found" and failed on the first vector
+# branch, and grand.sim.efield2voltage did not import at all (#278).
+grand = ["dataio/version", "dataio/vector_filling.C", "sim/detector/rf_chain_config.xml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# An expected failure that starts passing fails the run, so that a fix is
+# noticed and its marker removed (#271).
+xfail_strict = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+# Notebooks are excluded.  They are a different kind of artefact: exploratory,
+# often deliberately repetitive, and their "unused variable" findings are
+# usually a cell being read interactively rather than dead code.  Their
+# *outputs* are what needs managing, which nbstripout does in pre-commit.
+extend-exclude = ["*.ipynb"]
+
+[tool.ruff.lint]
+# Pinned rather than left to the default.  Ruff's default selection widens
+# between releases, which turns a green CI red on unchanged code; this is the
+# set the package is being cleaned against.
+#
+# "D" is pydocstyle.  Every function in the package is to carry a numpydoc
+# docstring -- description, Parameters, Returns, versionadded/versionchanged
+# where they apply, and a worked example.  Doing that to 554 functions in one
+# pass would stall everything else, so it is a ratchet instead: the
+# per-file-ignores list below names the modules not yet converted, and entries
+# are deleted as modules are finished.  The list may shrink and must never
+# grow.  `python quality/docstring_coverage.py` reports where it stands.
+select = ["E4", "E7", "E9", "F", "D"]
+
+ignore = [
+    # pydocstyle wants imperative mood ("Return the ..."); this project uses
+    # third person ("Returns the ..."), matching the docstrings in the
+    # sibling NuOscProbExact and Magnus codebases and reading better beside
+    # the numpydoc Returns section.  The rule contradicts the house style, so
+    # it is off rather than suppressed file by file.
+    "D401",
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "numpy"
+
+[tool.ruff.lint.per-file-ignores]
+# Two ratchets in one table.
+#
+# "D" marks a module whose docstrings are not yet numpydoc.  Everything else
+# is pre-existing lint debt: 336 findings in code that had never been checked,
+# because CI has not run in years.  67 were fixed automatically; the rest are
+# recorded here so the lint job starts green and can be made a required check.
+#
+# Both lists may shrink and must never grow.  A module converted to numpydoc
+# loses its "D"; a file cleaned of a rule loses that rule.  New entries are not
+# added -- new code is written clean.
+#
+# One exception, and only one: code that has never been linted at all, entering
+# the scope for the first time.  That is not new debt, it is debt becoming
+# visible, and baselining it is the same act that recorded the original 336
+# findings above.  It has happened once since: granddb/ on 2026-09-08, when it
+# turned out to ship in every wheel while sitting outside every gate.  If you
+# find yourself adding an entry for any other reason, the answer is no.
+#
+# grand/geo/coordinates.py came off the D list on 2026-08-30, the first module
+# fully converted.
+
+"grand/__init__.py" = ["D", "E402", "F401"]
+"grand/aoi/__init__.py" = ["F403"]
+"grand/aoi/antenna.py" = ["D"]
+"grand/aoi/event.py" = ["D", "E701", "E711", "E721", "E722", "F402", "F841"] # (a) _aoi_levels_lwp, dev_marion
+"grand/aoi/event_list.py" = ["D", "F841"]      # (a)
+"grand/aoi/shower.py" = ["D"]                  # (a)
+"grand/aoi/timetrace.py" = ["D", "F403", "F405"]
+"grand/basis/du_network.py" = ["D"]
+"grand/basis/pipeline.py" = ["D"]
+"grand/basis/signal.py" = ["D"]                # (a) refact_galaxy
+"grand/basis/traces_event.py" = ["D"]
+"grand/basis/type_trace.py" = ["D"]
+"grand/dataio/__init__.py" = ["F403"]
+"grand/dataio/data_handling.py" = ["D", "E721", "E722", "E741", "F841"] # (a)
+"grand/dataio/data_tree.py" = ["D", "E701", "E712", "E721", "E722", "F402", "F841"]
+"grand/dataio/descriptors.py" = ["D", "E402", "E701", "E722"] # (a)
+"grand/dataio/event_trees.py" = ["D", "E722"]  # (a)
+"grand/dataio/protocol.py" = ["D"]
+"grand/dataio/root_files.py" = ["D"]
+"grand/dataio/run_trees.py" = ["D"]            # (a) dev_marion
+"grand/geo/__init__.py" = ["F401"]
+"grand/geo/coordinates.py" = ["E722"]
+"grand/geo/coordinates_test.ipynb" = ["D"]     # a notebook, not a module
+"grand/geo/geomagnet.py" = ["D"]
+"grand/geo/gull.py" = ["D", "F841"]
+"grand/geo/topography.py" = ["D", "F811"]
+"grand/geo/turtle.py" = ["D", "E731"]
+"grand/manage_log.py" = ["D"]
+"grand/recon/elec_field.py" = ["D"]
+"grand/recon/params_shower.py" = ["D"]
+"grand/sim/detector/adc.py" = ["D"]            # (b)
+"grand/sim/detector/antenna_model.py" = ["D"]  # (b)
+"grand/sim/detector/process_ant.py" = ["D"]    # (b)
+"grand/sim/detector/rf_chain.py" = ["D", "F811", "F821", "F841"] # (b)
+"grand/sim/efield2voltage.py" = ["D"]          # (b)
+"grand/sim/noise/Compute_Plot_Galactic_Noise.py" = ["D", "E741", "F841"]
+"grand/sim/noise/galaxy.py" = ["D"]            # (b)
+"grand/sim/shower/gen_shower.py" = ["D"]
+"grand/sim/shower/pdg.py" = ["D"]
+"quality/check_score_coverage.py" = ["D400"]
+"quality/ci/manage_sonar_update.py" = ["D103", "D400"]
+"quality/docstring_coverage.py" = ["D103"]
+"quality/premerge_check.py" = ["D103"]
+"tests/**" = ["D"]
+"tests/basis/test_pipeline.py" = ["E722"]
+"tests/basis/test_signal.py" = ["F403", "F405"]
+"tests/basis/test_traces_event.py" = ["F403", "F405"]
+"tests/dataio/test_data_tree.py" = ["E712", "F841"]
+"tests/dataio/test_descriptors.py" = ["F841"]
+"tests/dataio/test_root_trees.py" = ["F841"]
+"tests/dataio/test_run_trees.py" = ["E712"]
+"tests/geo/test_coordinates.py" = ["F841"]
+"tests/geo/test_gull.py" = ["F841"]
+"tests/geo/test_turtle.py" = ["F841"]
+"tests/recon/test_elec_field.py" = ["F841"]
+"tests/recon/test_params_shower.py" = ["F841"]
+"tests/sim/test_antenna.py" = ["F841"]
+
+# granddb, baselined 2026-09-08 when it entered the lint scope.  212 findings
+# in code CI had never looked at.  The F-rules here are real: F403/F405 are
+# `import *`, F401 unused imports, F841 unused variables.  They come off in
+# stages 3 and 4; the D entries follow module by module as elsewhere.
+"granddb/ReadRootForDb.py" = ["D", "E402"]
+"granddb/__init__.py" = ["D"]
+"granddb/datamanager.py" = ["D"]
+"granddb/docker/test.py" = ["D"]
+"granddb/granddblib.py" = ["D"]
+"granddb/monitoring.py" = ["D"]
+"granddb/monitoring_site.py" = ["D"]
+"granddb/refresh_mat_views.py" = ["D"]
+"granddb/register_dataset_in_db.py" = ["D"]
+"granddb/register_dir_in_db.py" = ["D"]
+"granddb/register_file_in_db.py" = ["D"]
+"granddb/register_in_db.py" = ["D"]
+"granddb/rootdblib.py" = ["D"]

@@ -63,7 +63,8 @@ class Version:
         ver_split = required.split(".")
         if len(ver_split) != 3:
             raise InvalidVersion(
-                f"Expected version format to be `Major.minor.patch`, got {required}."
+                f"Expected version format to be `Major.minor.patch`, got {
+                    required}."
             )
         kwargs = {}
         kwargs["major"] = int(ver_split[0])
@@ -101,9 +102,12 @@ GULL_URL = "https://github.com/niess/gull.git"
 GULL_TAG = "286ace5"
 TURTLE_VERSION = "v0.9"
 
-ZIG_VERSION_RANGE = Range(min=Version.parse("0.16.0"), max=Version.parse("0.17.0"))
+ZIG_VERSION_RANGE = Range(min=Version.parse(
+    "0.16.0"), max=Version.parse("0.17.0"))
 ZIG_DL_URL = "https://ziglang.org/download/"
 ZIG_VERSION = "0.16.0"
+
+FALLBACK_PYPROJECT = Path(__file__).parent / "fallback" / "pyproject.toml"
 
 
 @dataclass
@@ -120,7 +124,7 @@ class Config:
 
     def __post_init__(self):
         self.grandlib_root = Path(self.grandlib_root).expanduser().resolve()
-        if not (self.grandlib_root / "pyproject.toml").is_file():
+        if not (self.grandlib_root / "grand" / "__init__.py").is_file():
             raise MissingGrandlibPathError(
                 f"{self.grandlib_root} is not a Grandlib checkout (no pyptoject.toml)."
             )
@@ -232,7 +236,8 @@ def install_zig(cfg: Config):
     if zig_bin is not None:
         print(f"Found zig executable at {zig_bin}...")
         version = (
-            subprocess.run([zig_bin, "version"], check=True, capture_output=True)
+            subprocess.run([zig_bin, "version"],
+                           check=True, capture_output=True)
             .stdout.decode()
             .strip()
         )
@@ -248,7 +253,8 @@ def install_zig(cfg: Config):
 
     if cfg.download is False:
         raise RuntimeError(
-            f"No Zig {ZIG_VERSION_RANGE.min}–{ZIG_VERSION_RANGE.max} found and "
+            f"No Zig {ZIG_VERSION_RANGE.min}–{
+                ZIG_VERSION_RANGE.max} found and "
             "--no-download was given. Use --zig <path> or allow the download."
         )
 
@@ -263,9 +269,11 @@ def install_zig(cfg: Config):
     # Otherwise, download Zig
     arch = "aarch64" if machine in ("arm64", "aarch64") else "x86_64"
     if system == "Darwin":
-        url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-macos-{ZIG_VERSION}.tar.xz"
+        url = f"{ZIG_DL_URL}{
+            ZIG_VERSION}/zig-{arch}-macos-{ZIG_VERSION}.tar.xz"
     elif system == "Linux":
-        url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-linux-{ZIG_VERSION}.tar.xz"
+        url = f"{ZIG_DL_URL}{
+            ZIG_VERSION}/zig-{arch}-linux-{ZIG_VERSION}.tar.xz"
     elif system == "Windows":
         arch = "aarch64" if machine == "ARM64" else "x86_64"
         url = f"{ZIG_DL_URL}{ZIG_VERSION}/zig-{arch}-windows-{ZIG_VERSION}.zip"
@@ -298,7 +306,8 @@ def install_zig(cfg: Config):
 
     cfg.zig_bin = find_local_zig(cfg.zig_path)
     if cfg.zig_bin is None:
-        raise RuntimeError(f"Zig extracted to {cfg.zig_path} but no binary was found.")
+        raise RuntimeError(f"Zig extracted to {
+                           cfg.zig_path} but no binary was found.")
     print(f"Zig installed at {cfg.zig_bin}")
 
 
@@ -380,7 +389,14 @@ def build_c_libs(cfg: Config):
 
 @contextmanager
 def temp_environ(**overrides: str):
-    """Temporarily set environment variables, restoring them afterwards."""
+    """Temporarily set environment variables, restoring them afterwards.
+
+    Parameters
+    ----------
+    overrides: str
+        Environment variable to override. Expected by keyword arguments call:
+        `ENV_NAME = "env_value"`.
+    """
     saved = {k: os.environ.get(k) for k in overrides}
     os.environ.update(overrides)
     try:
@@ -394,17 +410,47 @@ def temp_environ(**overrides: str):
 
 
 def build_python_ext(cfg: Config):
-    """Build the python C extension in-process with cffi."""
-    import build_core
+    """Build the python C extension in-process with cffi.
+
+    Parameters
+    ----------
+    cfg: Config
+        Install configuration
+    """
+    import build_ext
 
     print("Building Python extension with cffi...")
     with temp_environ(LDFLAGS="", CFLAGS="", CXXFLAGS=""):
-        module = build_core.build(
+        module = build_ext.build(
             build_dir=cfg.build_dir,
             src_dir=cfg.grandlib_root / "src",
             out_dir=cfg.grand_dir,
         )
-    print(f"Built {module}")
+    print(f"Built {module}")o
+
+
+def ensure_pyproject(cfg: Config) -> Optional[Path]:
+    """Copy the fallback pyproject.toml into the checkout if it has no packaging.
+
+    Parameters
+    ----------
+    cfg: Config
+        Install configuration.
+
+    Returns
+    -------
+    path: Optional[Path]
+        Returns the path of the copied file, or None if nothing was copied.
+    """
+    root = cfg.grandlib_root
+    if (root / "pyproject.toml").is_file() or (root / "setup.py").is_file():
+        return None
+    print("Warning: this GRANDlib branch has no pyproject.toml; using the fallback "
+          f"from {FALLBACK_PYPROJECT}. It may not match this branch exactly."
+          )
+    target = root / "pyproject.toml"
+    shutil.copy(FALLBACK_PYPROJECT, target)
+    return target
 
 
 def install_package(cfg: Config):
@@ -416,18 +462,23 @@ def install_package(cfg: Config):
        Install configuration.
     """
     print("Installing grand package...")
-    subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "-e",
-            str(cfg.grandlib_root),
-        ],
-        cwd=str(cfg.root_dir),
-        check=True,
-    )
+    copied = ensure_pyproject(cfg)
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "-e",
+                str(cfg.grandlib_root),
+            ],
+            cwd=str(cfg.root_dir),
+            check=True,
+        )
+    finally:
+        if copied is not NOne:
+            copied.unlink(missing_ok=True)
 
 
 def cleanup(cfg: Config):
